@@ -301,7 +301,7 @@ fun SpeedTestLayout(
                 onValueChange = viewModel::onIpChange,
                 label = { Text("Server Hostname or IP Address") },
                 modifier = Modifier
-                    .menuAnchor(MenuAnchorType.PrimaryEditable, enabled = !isTesting)
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, enabled = !isTesting)
                     .fillMaxWidth(),
                 singleLine = true,
                 enabled = !isTesting,
@@ -360,7 +360,7 @@ fun SpeedTestLayout(
                     label = { Text("Sending Rate (Mbps)") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                     modifier = Modifier
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = !isTesting)
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = !isTesting)
                         .fillMaxWidth(),
                     enabled = !isTesting
                 )

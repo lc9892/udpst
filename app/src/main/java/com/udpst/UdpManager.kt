@@ -75,6 +75,8 @@ class UdpManager {
         var serverSrcIp: String? = null,
         var controlPort: Int = 0,
         var testDirection: Int = 0,
+        var randPayload: Boolean = false,
+        var testOptions: String = "",
         var maxBandwidth: UInt = 0u,
         var selectedRate: UInt = 0u,
         var testPort: Int = 0,
@@ -385,6 +387,13 @@ class UdpManager {
     //
     private fun createControlHdrTA(): ByteArray {
         //
+        // Special options available via unique max bandwidth bit settings
+        //
+        val minMaxBWValue = 30000u // Threshold for special options
+        val optAlgoCBitMap = 0x01 // Use algorithm C for rate adjustment
+        val optRandPBitMap = 0x02 // Randomize payload data
+
+        //
         // Create Test Activation Request
         //
         val cHdrTA = ControlHdrTA.createHeap().apply {
@@ -405,8 +414,22 @@ class UdpManager {
             seqErrThresh = 10u
             ignoreOooDup = 1u
             modifierBitmap = 0u
-            // Use unique (and unlikely) max bandwidth value for "special" option
-            rateAdjAlgo = if (r.maxBandwidth == 30001u) CHTA_RA_ALGO_C.toUByte() else CHTA_RA_ALGO_B.toUByte()
+            rateAdjAlgo = CHTA_RA_ALGO_B.toUByte()
+            //
+            // Check for special options
+            //
+            if (r.maxBandwidth > minMaxBWValue) {
+                r.testOptions += ", Options:"
+                if ((r.maxBandwidth and optAlgoCBitMap.toUInt()) != 0u) {
+                    rateAdjAlgo = CHTA_RA_ALGO_C.toUByte()
+                    r.testOptions += " +AlgoC"
+                }
+                if ((r.maxBandwidth and optRandPBitMap.toUInt()) != 0u) {
+                    r.randPayload = true
+                    modifierBitmap = modifierBitmap.or(CHTA_RAND_PAYLOAD.toUByte())
+                    r.testOptions += " +Rand"
+                }
+            }
             reserved2 = 0u
             srStruct = ByteArray(SendingRate.TOTAL_SIZE)
             subIntPeriod = if (CLIENT_VER_IS_LATEST) DEF_SUBINT_PERIOD.toUShort() else 0u
@@ -566,15 +589,16 @@ class UdpManager {
                         when (val responseCode = resp.cmdResponse.toInt()) {
                             CHTA_CRSP_NONE -> r.callback?.onStatus("CRTA not provided in server response")
                             CHTA_CRSP_ACKOK -> {
-                                // Save sending rate structure from server
-                                sendingRateBuf.clear()
-                                sendingRateBuf.put(resp.srStruct)
-                                sendingRateBuf.flip()
-                                Log.d("UdpManager", "$pdutext Response received: Sending rate structure {${srStruct.txInterval1}, " +
-                                            "${srStruct.udpPayload1}, ${srStruct.burstSize1}, ${srStruct.txInterval2}, ${srStruct.udpPayload2}, ${srStruct.burstSize2}, " +
-                                            "Random=${(srStruct.udpAddon2 and SRATE_RAND_BIT).toInt().ushr(31)}:${srStruct.udpAddon2 and SRATE_RAND_BIT.inv()}}"
-                                )
-                                break // Exits the 'i' loop
+                                if (r.randPayload && (resp.modifierBitmap and CHTA_RAND_PAYLOAD.toUByte()).toUInt() == 0u) {
+                                    // Randomized payload request was denied by server
+                                    r.callback?.onStatus("Server must enable randomized payload")
+                                } else {
+                                    // Save sending rate structure from server
+                                    sendingRateBuf.clear()
+                                    sendingRateBuf.put(resp.srStruct)
+                                    sendingRateBuf.flip()
+                                    break // Exits the 'i' loop
+                                }
                             }
                             CHTA_CRSP_BADPARAM -> r.callback?.onStatus("Test parameters rejected by server")
                             else -> r.callback?.onStatus("Unexpected CRTA ($responseCode) in server response")
@@ -712,7 +736,7 @@ class UdpManager {
                     r.callback?.onSummaryExchanged("Server: ${r.serverSrcIp}:${r.controlPort}")
                 val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
                 val formattedDateTime = sdf.format(java.util.Date())
-                r.callback?.onSummaryExchanged("Completion: $formattedDateTime")
+                r.callback?.onSummaryExchanged("Completion: $formattedDateTime${r.testOptions}")
 
                 r.callback?.onSetTesting(false) // Set testing to false if test completed
                 break // End data exchange
@@ -776,7 +800,7 @@ class UdpManager {
         @Suppress("UNUSED_PARAMETER")
         for (i in 1..2) {
             for (j in 1..burstSize) {
-                createLoadHdr(sendBuffer, payload, init)
+                createLoadHdr(sendBuffer, sizeofLoadHdr, payload, init)
                 init = false
                 val bytesSent = r.channel?.write(sendBuffer) ?: 0
                 if (bytesSent <= 0) // Check for backpressure
@@ -812,13 +836,13 @@ class UdpManager {
     //
     // Build Load PDU for data exchange
     //
-    private fun createLoadHdr(buffer: ByteBuffer, size: Int, init: Boolean) {
-        buffer.position(0)
+    private fun createLoadHdr(buffer: ByteBuffer, hsize: Int, size: Int, init: Boolean) {
         buffer.limit(size)
 
         //
         // Clearing not necessary since all fields populated initially
         //
+        buffer.position(0)
         lHdr.buffer = buffer
         if (init) {
             lHdr.pduId = LOAD_ID.toUShort()
@@ -839,6 +863,57 @@ class UdpManager {
                 lHdr.rttRespDelay = ((rttRespDelay + NSECADJ_MSEC) / NSECINMSEC).toUShort()
             }
             lHdr.checkSum = 0u
+        }
+
+        //
+        // Randomize payload if needed
+        //
+        if (r.randPayload) {
+            buffer.position(hsize)
+            randomizePayload(buffer)
+            buffer.position(0)
+        }
+    }
+
+    //
+    // Randomizes the contents of the given ByteBuffer to introduce high entropy,
+    // defeating pattern-based compression schemes in networking equipment.
+    //
+    fun randomizePayload(buffer: ByteBuffer) {
+        if (buffer.remaining() == 0) return
+
+        var state = Random.nextLong() // Single initial seed for minimal RNG overhead
+        val size = buffer.remaining()
+        val longCount = size / 8
+
+        //
+        // Process in 64-bit chunks
+        //
+        @Suppress("UNUSED_PARAMETER")
+        for (i in 0 until longCount) {
+            // Xorshift64* variant: fast, period 2^64-1, good statistical properties for non-crypto use
+            state = state xor (state shl 13)
+            state = state xor (state ushr 7)
+            state = state xor (state shl 17)
+            buffer.putLong(state)
+        }
+
+        //
+        // Handle remaining bytes (0-7)
+        //
+        val remaining = size % 8
+        if (remaining > 0) {
+            // Generate one more long value
+            state = state xor (state shl 13)
+            state = state xor (state ushr 7)
+            state = state xor (state shl 17)
+
+            var temp = state
+            @Suppress("UNUSED_PARAMETER")
+            for (j in 0 until remaining) {
+                buffer.put((temp and 0xFFL).toByte())
+                temp = temp ushr 8
+            }
         }
     }
 

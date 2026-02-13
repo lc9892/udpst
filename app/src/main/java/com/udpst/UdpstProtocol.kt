@@ -103,6 +103,7 @@ const val CHTA_CRSP_ACKOK = 1
 const val CHTA_CRSP_BADPARAM = 2
 const val SRATE_RAND_BIT = 0x80000000u
 const val CHTA_SRIDX_DEF = UInt.MAX_VALUE
+const val CHTA_RAND_PAYLOAD = 0x02
 const val CHTA_RA_ALGO_B = 0u
 const val CHTA_RA_ALGO_C = 1u
 //-----------------------------------
