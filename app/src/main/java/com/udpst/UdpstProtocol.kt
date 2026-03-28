@@ -550,8 +550,8 @@ class SubIntStats(buffer: ByteBuffer) : DatagramPDU(buffer) {
         val DELAYVARMAX_OFFSET: Int = current.also { current += SIZE_U32 }
         val DELAYVARSUM_OFFSET: Int = current.also { current += SIZE_U32 }
         val DELAYVARCNT_OFFSET: Int = current.also { current += SIZE_U32 }
-        val RTTMINIMUM_OFFSET: Int  = current.also { current += SIZE_U32 }
-        val RTTMAXIMUM_OFFSET: Int  = current.also { current += SIZE_U32 }
+        val RTTVARMINIMUM_OFFSET: Int  = current.also { current += SIZE_U32 }
+        val RTTVARMAXIMUM_OFFSET: Int  = current.also { current += SIZE_U32 }
         val ACCUMTIME_OFFSET: Int   = current.also { current += SIZE_U32 }
         // Conditional C compiler padding for legacy versions
         val PADDING2_OFFSET: Int    = if (CLIENT_VER_IS_LATEST) {0} else { current.also { current += SIZE_U32 } }
@@ -588,12 +588,12 @@ class SubIntStats(buffer: ByteBuffer) : DatagramPDU(buffer) {
     var delayVarCnt: UInt
         get() = getUInt(DELAYVARCNT_OFFSET)
         set(value) = putUInt(DELAYVARCNT_OFFSET, value)
-    var rttMinimum: UInt
-        get() = getUInt(RTTMINIMUM_OFFSET)
-        set(value) = putUInt(RTTMINIMUM_OFFSET, value)
-    var rttMaximum: UInt
-        get() = getUInt(RTTMAXIMUM_OFFSET)
-        set(value) = putUInt(RTTMAXIMUM_OFFSET, value)
+    var rttVarMinimum: UInt
+        get() = getUInt(RTTVARMINIMUM_OFFSET)
+        set(value) = putUInt(RTTVARMINIMUM_OFFSET, value)
+    var rttVarMaximum: UInt
+        get() = getUInt(RTTVARMAXIMUM_OFFSET)
+        set(value) = putUInt(RTTVARMAXIMUM_OFFSET, value)
     var accumTime: UInt
         get() = getUInt(ACCUMTIME_OFFSET)
         set(value) = putUInt(ACCUMTIME_OFFSET, value)

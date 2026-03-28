@@ -1015,10 +1015,10 @@ class UdpManager {
             // Update RTT variation for trial interval and RTT variation range for sub-interval
             //
             r.rttVarSample = rtt.toUInt() - r.rttMinimum
-            if (r.rttVarSample < sisAct.rttMinimum)
-                sisAct.rttMinimum = r.rttVarSample
-            if (r.rttVarSample > sisAct.rttMaximum)
-                sisAct.rttMaximum = r.rttVarSample
+            if (r.rttVarSample < sisAct.rttVarMinimum)
+                sisAct.rttVarMinimum = r.rttVarSample
+            if (r.rttVarSample > sisAct.rttVarMaximum)
+                sisAct.rttVarMaximum = r.rttVarSample
             r.rttVarSum += r.rttVarSample
             r.rttVarCnt++
             //
@@ -1209,7 +1209,7 @@ class UdpManager {
         sisActBuf.put(zeroHeapForSis)
         sisActBuf.flip()
         sisAct.delayVarMin = STATUS_NODEL
-        sisAct.rttMinimum = STATUS_NODEL
+        sisAct.rttVarMinimum = STATUS_NODEL
         r.subIntClock = systemClock
         if (initialize)
             r.accumTime = 0u
@@ -1344,8 +1344,8 @@ class UdpManager {
         // Round-trip time variation
         //
         var rttmin = 0u
-        if (sisSav.rttMinimum != STATUS_NODEL)
-            rttmin = sisSav.rttMinimum
+        if (sisSav.rttVarMinimum != STATUS_NODEL)
+            rttmin = sisSav.rttVarMinimum
         var rttavg = 0u
         if (r.rttVarCnt > 0u)
             rttavg = (((r.rttVarSum * 10u) / r.rttVarCnt) + 5u) / 10u
@@ -1373,7 +1373,7 @@ class UdpManager {
             "%6.2f".format(delivered),
             "${sisSav.seqErrLoss} / ${sisSav.seqErrOoo} / ${sisSav.seqErrDup}",
             "$dvmin / $dvavg / ${sisSav.delayVarMax}",
-            "$rttmin / $rttavg / ${sisSav.rttMaximum}",
+            "$rttmin / $rttavg / ${sisSav.rttVarMaximum}",
             "%6.2f".format(rxMbps)
         )
 
